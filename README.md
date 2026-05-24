@@ -32,3 +32,34 @@ The debug APK is emitted under `app\build\outputs\apk\debug\`.
 `C:\Users\wjdqk\OneDrive\바탕 화면\launch-lotto-preview.cmd` rebuilds the current debug
 APK, starts the local Android emulator when needed, installs the APK, and opens the app.
 This machine uses ADB port `5600` because the default ADB port range is reserved by Windows.
+
+## Galaxy S25 Ultra Preview
+
+The app is responsive, so it adapts to tall Android phone screens. For a Galaxy S25 Ultra
+preview, run:
+
+```powershell
+.\launch-lotto-s25-ultra-preview.cmd
+```
+
+This applies a Galaxy S25 Ultra-like emulator display profile: `1440x3120` with density `560`.
+The display override is only applied to emulators, not to a physical phone.
+
+## Install On Your Phone
+
+Connect a Galaxy phone with USB debugging enabled, then run:
+
+```powershell
+.\install-lotto-to-phone.cmd
+```
+
+If the phone is not detected, enable Android Developer options on the phone, turn on USB
+debugging, reconnect the USB cable, and approve the debugging prompt on the phone.
+
+## Weekly Draw Updates
+
+The app checks the official Lotto 6/45 result flow every time it starts and when the refresh
+button is tapped. After the Saturday draw result is published by the official source, opening
+the app or tapping refresh updates the latest round and caches it on the device. If the official
+result is not available yet, the app keeps showing the cached result and reports that refresh
+failed instead of deleting existing data.

@@ -1,6 +1,8 @@
 param(
     [string]$AvdName = "Medium_Phone_API_30",
-    [int]$AdbPort = 5037
+    [int]$AdbPort = 5037,
+    [ValidateSet("Default", "GalaxyS25Ultra")]
+    [string]$DeviceProfile = "Default"
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,9 +39,25 @@ function Get-AdbDevices {
     )
 }
 
+function Invoke-Adb([string[]]$Arguments) {
+    & $adb -P $AdbPort @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "ADB command failed: adb $($Arguments -join ' ')"
+    }
+}
+
+function Get-PrimaryDevice {
+    $devices = @(Get-AdbDevices)
+    if ($devices.Count -eq 0) {
+        return $null
+    }
+
+    return $devices[0]
+}
+
 function Wait-ForAndroidBoot {
     for ($attempt = 0; $attempt -lt 72; $attempt++) {
-        $devices = Get-AdbDevices
+        $devices = @(Get-AdbDevices)
         if ($devices.Count -gt 0) {
             $bootCompleted = (& $adb -P $AdbPort shell getprop sys.boot_completed 2>$null).Trim()
             if ($bootCompleted -eq "1") {
@@ -50,6 +68,21 @@ function Wait-ForAndroidBoot {
     }
 
     throw "Android emulator did not finish booting in time."
+}
+
+function Set-PreviewDeviceProfile([string]$Device) {
+    if ($DeviceProfile -ne "GalaxyS25Ultra") {
+        return
+    }
+
+    if ($Device -notlike "emulator-*") {
+        Write-Host "Galaxy S25 Ultra display profile is only applied to emulators. Skipping display override for $Device." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "Applying Galaxy S25 Ultra preview size: 1440x3120, density 560..." -ForegroundColor Cyan
+    Invoke-Adb @("-s", $Device, "shell", "wm", "size", "1440x3120")
+    Invoke-Adb @("-s", $Device, "shell", "wm", "density", "560")
 }
 
 Assert-Exists $gradleWrapper "Gradle wrapper"
@@ -78,7 +111,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "ADB server could not start on port $AdbPort."
 }
 
-if ((Get-AdbDevices).Count -eq 0) {
+if (@(Get-AdbDevices).Count -eq 0) {
     $avds = & $emulator -list-avds
     if ($AvdName -notin $avds) {
         throw "Android virtual device not found: $AvdName"
@@ -92,18 +125,17 @@ if ((Get-AdbDevices).Count -eq 0) {
 
 Write-Host "Waiting for Android to be ready..." -ForegroundColor Cyan
 Wait-ForAndroidBoot
+$targetDevice = Get-PrimaryDevice
+if (-not $targetDevice) {
+    throw "No Android device is available after boot."
+}
+Set-PreviewDeviceProfile $targetDevice
 
 Write-Host "Installing latest preview..." -ForegroundColor Cyan
-& $adb -P $AdbPort install -r $apk
-if ($LASTEXITCODE -ne 0) {
-    throw "APK install failed."
-}
+Invoke-Adb @("-s", $targetDevice, "install", "-r", $apk)
 
-& $adb -P $AdbPort shell am force-stop $packageName | Out-Null
-& $adb -P $AdbPort shell am start -n $activity
-if ($LASTEXITCODE -ne 0) {
-    throw "App launch failed."
-}
+Invoke-Adb @("-s", $targetDevice, "shell", "am", "force-stop", $packageName)
+Invoke-Adb @("-s", $targetDevice, "shell", "am", "start", "-n", $activity)
 
 Write-Host ""
-Write-Host "Lotto preview is open in the Android emulator." -ForegroundColor Green
+Write-Host "Lotto preview is open on $targetDevice." -ForegroundColor Green
